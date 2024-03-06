@@ -40,13 +40,13 @@ from omni.isaac.orbit.envs import RLTaskEnv
 from omni.isaac.orbit.envs import BaseEnv, BaseEnvCfg
 
 # from omni.isaac.orbit_tasks.classic.cartpole.cartpole_env_cfg import CartpoleEnvCfg
-from env_cfg import FrankaCubeLiftEnvCfg 
+from env_cfg import FrankaManipulationEnvCfg 
 
 
 def main():
     """Main Function"""
-    env_cfg = FrankaCubeLiftEnvCfg()
-    env_cfg.scene.num_envs = args_cli.num_envs
+    env_cfg = FrankaManipulationEnvCfg()
+    env_cfg.scene.num_envs = 4
     env = RLTaskEnv(cfg=env_cfg)
     
     # simulate the environment
@@ -66,7 +66,7 @@ def main():
             # step the environment
             obs, rew, terminated, truncated, info = env.step(joint_efforts)
             # print current orientation of pole
-            print("[Env 0] joint: ", obs["policy"][0][1].item())
+            # print("[Env 0] joint: ", obs["policy"][0][1].item())
             # update counter
                 
             

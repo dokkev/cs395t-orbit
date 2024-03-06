@@ -14,6 +14,21 @@ from omni.isaac.orbit.utils.assets import ISAAC_NUCLEUS_DIR
 from omni.isaac.orbit_tasks.manipulation.lift import mdp
 from omni.isaac.orbit_tasks.manipulation.lift.lift_env_cfg import LiftEnvCfg
 
+import omni.isaac.orbit.sim as sim_utils
+from omni.isaac.orbit.assets import ArticulationCfg, AssetBaseCfg, RigidObjectCfg
+from omni.isaac.orbit.envs import RLTaskEnvCfg
+from omni.isaac.orbit.managers import CurriculumTermCfg as CurrTerm
+from omni.isaac.orbit.managers import ObservationGroupCfg as ObsGroup
+from omni.isaac.orbit.managers import ObservationTermCfg as ObsTerm
+from omni.isaac.orbit.managers import RandomizationTermCfg as RandTerm
+from omni.isaac.orbit.managers import RewardTermCfg as RewTerm
+from omni.isaac.orbit.managers import SceneEntityCfg
+from omni.isaac.orbit.managers import TerminationTermCfg as DoneTerm
+from omni.isaac.orbit.scene import InteractiveSceneCfg
+from omni.isaac.orbit.sensors.frame_transformer.frame_transformer_cfg import FrameTransformerCfg
+from omni.isaac.orbit.sim.spawners.from_files.from_files_cfg import GroundPlaneCfg, UsdFileCfg
+
+from . import mdp
 
 ##
 # Pre-defined configs
@@ -22,8 +37,11 @@ from omni.isaac.orbit.markers.config import FRAME_MARKER_CFG  # isort: skip
 from omni.isaac.orbit_assets.franka import FRANKA_PANDA_CFG  # isort: skip
 
 
+
+
+
 @configclass
-class FrankaCubeLiftEnvCfg(LiftEnvCfg):
+class FrankaManipulationEnvCfg(LiftEnvCfg):
     def __post_init__(self):
         # post init of parent
         super().__post_init__()
@@ -43,6 +61,7 @@ class FrankaCubeLiftEnvCfg(LiftEnvCfg):
         )
         # Set the body name for the end effector
         self.commands.object_pose.body_name = "panda_hand"
+        
 
         # Set Cube as object
         self.scene.object = RigidObjectCfg(
@@ -58,9 +77,18 @@ class FrankaCubeLiftEnvCfg(LiftEnvCfg):
                     max_linear_velocity=1000.0,
                     max_depenetration_velocity=5.0,
                     disable_gravity=False,
+            
                 ),
             ),
         )
+        # We can redefine physics parameters for the simulation again
+        self.sim.dt = 0.01  # 100Hz
+        self.sim.physx.bounce_threshold_velocity = 0.2
+        self.sim.physx.bounce_threshold_velocity = 0.01
+        self.sim.physx.gpu_found_lost_aggregate_pairs_capacity = 1024 * 1024 * 4
+        self.sim.physx.gpu_total_aggregate_pairs_capacity = 16 * 1024
+        self.sim.physx.friction_correlation_distance = 0.00625
+        
 
         # Listens to the required transforms
         marker_cfg = FRAME_MARKER_CFG.copy()
@@ -83,7 +111,7 @@ class FrankaCubeLiftEnvCfg(LiftEnvCfg):
 
 
 @configclass
-class FrankaCubeLiftEnvCfg_PLAY(FrankaCubeLiftEnvCfg):
+class FrankaCubeLiftEnvCfg_PLAY(FrankaManipulationEnvCfg):
     def __post_init__(self):
         # post init of parent
         super().__post_init__()
