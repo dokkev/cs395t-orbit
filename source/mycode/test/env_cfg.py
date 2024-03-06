@@ -28,7 +28,8 @@ from omni.isaac.orbit.scene import InteractiveSceneCfg
 from omni.isaac.orbit.sensors.frame_transformer.frame_transformer_cfg import FrameTransformerCfg
 from omni.isaac.orbit.sim.spawners.from_files.from_files_cfg import GroundPlaneCfg, UsdFileCfg
 
-from . import mdp
+from omni.isaac.orbit_tasks.classic.cartpole.cartpole_env_cfg import CartpoleEnvCfg
+
 
 ##
 # Pre-defined configs
@@ -38,7 +39,23 @@ from omni.isaac.orbit_assets.franka import FRANKA_PANDA_CFG  # isort: skip
 
 
 
+@configclass
+class FrankaManipulationScene
 
+@configclass
+class RewardsCfg:
+    """Reward terms for MDP"""
+    # (1) Constant running reward
+    alive = RewTerm(func=mdp.is_alive, weight=1.0)
+    # (2) Failure penalty
+    terminating = RewTerm(func=mdp.is_terminated, weight=-2.0)
+    # (3) Primary task Reward for lifting the object
+    # TODO: Add the reward term for lifting the object
+    # (4) Sub-task Reward for stable motion
+    # TODO: Add the reward term for stable motion (minimum jerk?)
+    # (5) Sub-task Reward for time efficiency
+    # TODO: Add the reward term for time efficiency
+   
 
 @configclass
 class FrankaManipulationEnvCfg(LiftEnvCfg):
@@ -88,7 +105,7 @@ class FrankaManipulationEnvCfg(LiftEnvCfg):
         self.sim.physx.gpu_found_lost_aggregate_pairs_capacity = 1024 * 1024 * 4
         self.sim.physx.gpu_total_aggregate_pairs_capacity = 16 * 1024
         self.sim.physx.friction_correlation_distance = 0.00625
-        
+
 
         # Listens to the required transforms
         marker_cfg = FRAME_MARKER_CFG.copy()
@@ -108,6 +125,9 @@ class FrankaManipulationEnvCfg(LiftEnvCfg):
                 ),
             ],
         )
+
+ 
+
 
 
 @configclass
