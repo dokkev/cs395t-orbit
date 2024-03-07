@@ -21,9 +21,13 @@ from omni.isaac.orbit.sensors import ContactSensor
 if TYPE_CHECKING:
     from omni.isaac.orbit.envs import RLTaskEnv
 
+# Define global variables for jerk
+prev_accel = None
+
 """
 General.
 """
+
 
 
 def is_alive(env: RLTaskEnv) -> torch.Tensor:
@@ -173,6 +177,25 @@ def joint_vel_limits(
     # clip to max error = 1 rad/s per joint to avoid huge penalties
     out_of_limits = out_of_limits.clip_(min=0.0, max=1.0)
     return torch.sum(out_of_limits, dim=1)
+
+
+def joint_jerk_limit_l2 (env: RLTaskEnv, asset_cfg: SceneEntityCfg = SceneEntityCfg("robot")) -> torch.Tensor:
+    """Penalize joint jerks on the articulation using L2-kernel.
+
+    NOTE: Only the joints configured in :attr:`asset_cfg.joint_ids` will have their joint accelerations contribute to the L2 norm.
+    """
+    # extract the used quantities (to enable type-hinting)
+    asset: Articulation = env.scene[asset_cfg.name]
+
+    global prev_accel
+    if (prev_accel == None):
+        prev_accel = asset.data.joint_acc[:, asset_cfg.joint_ids]
+    curr_accel = asset.data.joint_acc[:, asset_cfg.joint_ids]
+    dt = env.step_dt
+    jerk = (curr_accel - prev_accel) / dt
+    prev_accel = curr_accel
+
+    return torch.sum(torch.square(jerk), dim=1)
 
 
 """

@@ -142,27 +142,45 @@ class RewardsCfg:
 
     lifting_object = RewTerm(func=mdp.object_is_lifted, params={"minimal_height": 0.06}, weight=15.0)
 
+
+    # Constant running reward, penalizing being alive for too long (time efficiency)
+    alive = RewTerm(func=mdp.is_alive, weight=-1e-4) 
+    # Failure penalty, made large (from -2.0) to overly penalize failure
+    terminating = RewTerm(func=mdp.is_terminated, weight=-10.0)
+
     object_goal_tracking = RewTerm(
         func=mdp.object_goal_distance,
         params={"std": 0.3, "minimal_height": 0.06, "command_name": "object_pose"},
         weight=16.0,
     )
 
+    # Reward goind over a specific height
     object_goal_tracking_fine_grained = RewTerm(
         func=mdp.object_goal_distance,
         params={"std": 0.05, "minimal_height": 0.06, "command_name": "object_pose"},
         weight=5.0,
     )
 
-    # action penalty
+    # Penalize the rate of change of the actions using L2-kernel
     action_rate = RewTerm(func=mdp.action_rate_l2, weight=-1e-3)
 
+    # Penalizes quick l2 norm velocities
     joint_vel = RewTerm(
         func=mdp.joint_vel_l2,
         weight=-1e-4,
         params={"asset_cfg": SceneEntityCfg("robot")},
     )
 
+    # TODO: Task for achieveing desired angle
+
+    # (4) Sub-task Reward for stable motion (jerk)
+    joint_vel = RewTerm(
+        func=mdp.joint_jerk_limit_l2,
+        weight=-1e-4,
+        params={"asset_cfg": SceneEntityCfg("robot")},
+    )
+
+    
 
 @configclass
 class TerminationsCfg:
