@@ -47,8 +47,199 @@ from omni.isaac.orbit.markers.config import FRAME_MARKER_CFG  # isort: skip
 from omni.isaac.orbit_assets.franka import FRANKA_PANDA_CFG  # isort: skip
 
 
+
+
+
+@configclass
+class CommandsCfg:
+    """Command terms for the MDP."""
+
+    object_pose = mdp.UniformPoseCommandCfg(
+        asset_name="robot",
+        body_name=MISSING,  # will be set by agent env cfg
+        resampling_time_range=(5.0, 5.0),
+        debug_vis=True,
+        ranges=mdp.UniformPoseCommandCfg.Ranges(
+            pos_x=(0.4, 0.6), pos_y=(-0.25, 0.25), pos_z=(0.25, 0.5), roll=(0.0, 0.0), pitch=(0.0, 0.0), yaw=(0.0, 0.0)
+        ),
+    )
+
+
+@configclass
+class ActionsCfg:
+    """Action specifications for the MDP."""
+
+    # will be set by agent env cfg
+    body_joint_pos: mdp.JointPositionActionCfg = MISSING
+    finger_joint_pos: mdp.BinaryJointPositionActionCfg = MISSING
+
+
+@configclass
+class ObservationsCfg:
+    """Observation specifications for the MDP."""
+
+    @configclass
+    class PolicyCfg(ObsGroup):
+        """Observations for policy group."""
+
+        joint_pos = ObsTerm(func=mdp.joint_pos_rel)
+        joint_vel = ObsTerm(func=mdp.joint_vel_rel)
+        object_position = ObsTerm(func=mdp.object_position_in_robot_root_frame)
+        # TODO: Renable this term
+        #target_object_position = ObsTerm(func=mdp.generated_commands, params={"command_name": "object_pose"})
+        actions = ObsTerm(func=mdp.last_action)
+
+        def __post_init__(self):
+            self.enable_corruption = True
+            self.concatenate_terms = True
+
+    # observation groups
+    policy: PolicyCfg = PolicyCfg()
+
+
+@configclass
+class RandomizationCfg:
+    """Configuration for randomization."""
+
+    reset_all = RandTerm(func=mdp.reset_scene_to_default, mode="reset")
+
+    reset_object_position = RandTerm(
+        func=mdp.reset_root_state_uniform,
+        mode="reset",
+        params={
+            "pose_range": {"x": (-0.1, 0.1), "y": (-0.25, 0.25), "z": (0.0, 0.0)},
+            "velocity_range": {},
+            "asset_cfg": SceneEntityCfg("object", body_names="Object"),
+        },
+    )
+
+
+@configclass
+class RewardsCfg:
+    """Reward terms for the MDP."""
+    print("GOT TO THIS REWARD FUNCTION!!!!!!")
+    print("_________________________________________________________________")
+    print("_________________________________________________________________")
+    print("_________________________________________________________________")
+    print("_________________________________________________________________")
+    reaching_object = RewTerm(func=mdp.object_ee_distance, params={"std": 0.1}, weight=1.0)
+
+    # Penalizes quick l2 norm velocities
+    joint_vel = RewTerm(
+        func=mdp.joint_vel_l2,
+        weight=-1e-4,
+        params={"asset_cfg": SceneEntityCfg("robot")},
+    )
+
+
+    # TODO: Potentially reset form 0 to -1e3
+    # Penalize the rate of change of the actions using L2-kernel
+    #action_rate = RewTerm(func=mdp.action_rate_l2, weight=-1e3)
+
+    # TODO: Add back in
+    
+    # Upped from 15.0
+    lifting_object = RewTerm(func=mdp.object_is_lifted, params={"minimal_height": 0.06}, weight=40.0)
+
+
+    # NOTE: Will not need these rewards in the future only used if all rewards are negative
+    # Constant running reward, penalizing being alive for too long (time efficiency)
+    #alive = RewTerm(func=mdp.is_alive, weight=-1e-4) 
+    # Failure penalty, made large (from -2.0) to overly penalize failure
+    #terminating = RewTerm(func=mdp.is_terminated, weight=-2.0)
+
+    # TODO: Add back in
+    
+    object_goal_tracking = RewTerm(
+        func=mdp.object_goal_distance,
+        params={"std": 0.3, "minimal_height": 0.06, "command_name": "object_pose"},
+        weight=16.0,
+    )
+
+    # Reward goind over a specific height
+    object_goal_tracking_fine_grained = RewTerm(
+        func=mdp.object_goal_distance,
+        params={"std": 0.05, "minimal_height": 0.06, "command_name": "object_pose"},
+        weight=5.0,
+    )
+    # Penalize the rate of change of the actions using L2-kernel
+    #action_rate = RewTerm(func=mdp.action_rate_l2, weight=-1e-3)
+
+    
+
+    # TODO: Task for achieveing desired angle
+
+    # (4) Sub-task Reward for stable motion (jerk)
+    
+    
+    joint_jerk = RewTerm(
+        func=mdp.joint_jerk_limit_l2,
+        weight=-1e-4,
+        params={"asset_cfg": SceneEntityCfg("robot")},
+    )
+    
+
+    
+
+@configclass
+class TerminationsCfg:
+    """Termination terms for the MDP."""
+
+    time_out = DoneTerm(func=mdp.time_out, time_out=True)
+
+    
+    # TODO: Add back in
+    
+    object_dropping = DoneTerm(
+        func=mdp.base_height, params={"minimum_height": -0.05, "asset_cfg": SceneEntityCfg("object")}
+    )
+    
+
+@configclass
+class CurriculumCfg:
+    """Curriculum terms for the MDP."""
+    # TODO: Potentially add back in curriculum
+    pass # Not running curriculum at the moment
+    
+    """
+    action_rate = CurrTerm(
+        func=mdp.modify_reward_weight, params={"term_name": "action_rate", "weight": -1e-1, "num_steps": 10000}
+    )
+
+    joint_vel = CurrTerm(
+        func=mdp.modify_reward_weight, params={"term_name": "joint_vel", "weight": -1e-1, "num_steps": 10000}
+    )
+    """
+
 @configclass
 class FrankaCubeLiftEnvCfg(LiftEnvCfg):
+    """Configuration for the locomotion velocity-tracking environment."""
+
+
+    # Basic settings
+
+    observations: ObservationsCfg = ObservationsCfg()
+
+    actions: ActionsCfg = ActionsCfg()
+
+    randomization: RandomizationCfg = RandomizationCfg()
+
+    # MDP settings
+
+    curriculum: CurriculumCfg = CurriculumCfg()
+
+    rewards: RewardsCfg = RewardsCfg()
+
+    terminations: TerminationsCfg = TerminationsCfg()
+
+    # No command generator
+
+    commands: CommandsCfg = CommandsCfg()
+    
+    
+    
+    
+    
     def __post_init__(self):
         # post init of parent
         super().__post_init__()
@@ -105,144 +296,6 @@ class FrankaCubeLiftEnvCfg(LiftEnvCfg):
                 ),
             ],
         )
-
-
-@configclass
-class CommandsCfg:
-    """Command terms for the MDP."""
-
-    object_pose = mdp.UniformPoseCommandCfg(
-        asset_name="robot",
-        body_name=MISSING,  # will be set by agent env cfg
-        resampling_time_range=(5.0, 5.0),
-        debug_vis=True,
-        ranges=mdp.UniformPoseCommandCfg.Ranges(
-            pos_x=(0.4, 0.6), pos_y=(-0.25, 0.25), pos_z=(0.25, 0.5), roll=(0.0, 0.0), pitch=(0.0, 0.0), yaw=(0.0, 0.0)
-        ),
-    )
-
-
-@configclass
-class ActionsCfg:
-    """Action specifications for the MDP."""
-
-    # will be set by agent env cfg
-    body_joint_pos: mdp.JointPositionActionCfg = MISSING
-    finger_joint_pos: mdp.BinaryJointPositionActionCfg = MISSING
-
-
-@configclass
-class ObservationsCfg:
-    """Observation specifications for the MDP."""
-
-    @configclass
-    class PolicyCfg(ObsGroup):
-        """Observations for policy group."""
-
-        joint_pos = ObsTerm(func=mdp.joint_pos_rel)
-        joint_vel = ObsTerm(func=mdp.joint_vel_rel)
-        object_position = ObsTerm(func=mdp.object_position_in_robot_root_frame)
-        target_object_position = ObsTerm(func=mdp.generated_commands, params={"command_name": "object_pose"})
-        actions = ObsTerm(func=mdp.last_action)
-
-        def __post_init__(self):
-            self.enable_corruption = True
-            self.concatenate_terms = True
-
-    # observation groups
-    policy: PolicyCfg = PolicyCfg()
-
-
-@configclass
-class RandomizationCfg:
-    """Configuration for randomization."""
-
-    reset_all = RandTerm(func=mdp.reset_scene_to_default, mode="reset")
-
-    reset_object_position = RandTerm(
-        func=mdp.reset_root_state_uniform,
-        mode="reset",
-        params={
-            "pose_range": {"x": (-0.1, 0.1), "y": (-0.25, 0.25), "z": (0.0, 0.0)},
-            "velocity_range": {},
-            "asset_cfg": SceneEntityCfg("object", body_names="Object"),
-        },
-    )
-
-
-@configclass
-class RewardsCfg:
-    """Reward terms for the MDP."""
-
-    reaching_object = RewTerm(func=mdp.object_ee_distance, params={"std": 0.1}, weight=1.0)
-
-    lifting_object = RewTerm(func=mdp.object_is_lifted, params={"minimal_height": 0.06}, weight=15.0)
-
-
-    # Constant running reward, penalizing being alive for too long (time efficiency)
-    alive = RewTerm(func=mdp.is_alive, weight=-1e-4) 
-    # Failure penalty, made large (from -2.0) to overly penalize failure
-    terminating = RewTerm(func=mdp.is_terminated, weight=-10.0)
-
-    object_goal_tracking = RewTerm(
-        func=mdp.object_goal_distance,
-        params={"std": 0.3, "minimal_height": 0.06, "command_name": "object_pose"},
-        weight=16.0,
-    )
-
-    # Reward goind over a specific height
-    object_goal_tracking_fine_grained = RewTerm(
-        func=mdp.object_goal_distance,
-        params={"std": 0.05, "minimal_height": 0.06, "command_name": "object_pose"},
-        weight=5.0,
-    )
-
-    # Penalize the rate of change of the actions using L2-kernel
-    action_rate = RewTerm(func=mdp.action_rate_l2, weight=-1e-3)
-
-    # Penalizes quick l2 norm velocities
-    joint_vel = RewTerm(
-        func=mdp.joint_vel_l2,
-        weight=-1e-4,
-        params={"asset_cfg": SceneEntityCfg("robot")},
-    )
-
-    # TODO: Task for achieveing desired angle
-
-    # (4) Sub-task Reward for stable motion (jerk)
-    
-    '''
-    joint_jerk = RewTerm(
-        func=mdp.joint_jerk_limit_l2,
-        weight=-1e-4,
-        params={"asset_cfg": SceneEntityCfg("robot")},
-    )
-    '''
-    
-
-@configclass
-class TerminationsCfg:
-    """Termination terms for the MDP."""
-
-    time_out = DoneTerm(func=mdp.time_out, time_out=True)
-
-    object_dropping = DoneTerm(
-        func=mdp.base_height, params={"minimum_height": -0.05, "asset_cfg": SceneEntityCfg("object")}
-    )
-
-
-@configclass
-class CurriculumCfg:
-    """Curriculum terms for the MDP."""
-
-    action_rate = CurrTerm(
-        func=mdp.modify_reward_weight, params={"term_name": "action_rate", "weight": -1e-1, "num_steps": 10000}
-    )
-
-    joint_vel = CurrTerm(
-        func=mdp.modify_reward_weight, params={"term_name": "joint_vel", "weight": -1e-1, "num_steps": 10000}
-    )
-
 
 
 @configclass
